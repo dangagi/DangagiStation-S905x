@@ -1,0 +1,138 @@
+#!/bin/sh
+
+################################################################################
+#      This file is part of OpenELEC - http://www.openelec.tv
+#      Copyright (C) 2009-2014 Stephan Raue (stephan@openelec.tv)
+#
+#  OpenELEC is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  OpenELEC is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with OpenELEC.  If not, see <http://www.gnu.org/licenses/>.
+################################################################################
+
+. /etc/profile
+
+oe_setup_addon emulator.tools.retroarch
+
+RETROARCH_CONFIG_DIR="$ADDON_HOME/config"
+RETROARCH_CONFIG_FILE="$RETROARCH_CONFIG_DIR/retroarch.cfg"
+RETROARCH_SAVEFILES_DIR="$ADDON_HOME/savefiles"
+#RETROARCH_SYSTEM_DIR="$ADDON_HOME/system"
+LIBS32BIT_ADDON_DIR="$ADDON_DIR/../emulator.tools.32bitlibs"
+
+chmod a+x $ADDON_DIR/bin/*
+
+if [ ! -f "$RETROARCH_CONFIG_FILE" ]; then
+  mkdir -p "$RETROARCH_CONFIG_DIR"
+  if [ -f "$ADDON_DIR/config/retroarch.cfg" ]; then
+    cp "$ADDON_DIR/config/retroarch.cfg" "$RETROARCH_CONFIG_FILE"
+  fi
+fi
+
+if [ ! -f "$RETROARCH_SAVEFILES_DIR" ]; then
+  mkdir -p "$RETROARCH_SAVEFILES_DIR"
+fi
+
+if [ ! -f "$RETROARCH_SYSTEM_DIR" ]; then
+  mkdir -p $RETROARCH_SYSTEM_DIR
+fi
+
+## Added by JoKeRzBoX Oct-2016:
+#### Handle defaults folders from addon settings: create and set in retroarch.cfg
+RETROARCH_SYSTEM_DIR="/storage/emulators/retroarch/system"
+RETROARCH_SCREENSHOTS_DIR="/storage/emulators/retroarch/screenshots"
+TMPFILE="/tmp/.retroarchtemp$$"
+if [ "$retroarch_system_folder" != "" ]; then
+	RETROARCH_SYSTEM_DIR="$retroarch_system_folder"
+fi
+if [ "$retroarch_screenshots_folder" != "" ]; then
+	RETROARCH_SCREENSHOTS_DIR="$retroarch_screenshots_folder"
+fi
+if [ ! -d "$RETROARCH_SYSTEM_DIR" ]; then
+	mkdir -p "$RETROARCH_SYSTEM_DIR"
+fi
+if [ ! -d "$RETROARCH_SCREENSHOTS_DIR" ]; then
+	mkdir -p "$RETROARCH_SCREENSHOTS_DIR"
+fi
+
+sed -i "s@system_directory[ ]*=.*@system_directory = \"$RETROARCH_SYSTEM_DIR\"@" "$RETROARCH_CONFIG_FILE" 
+sed -i "s@screenshot_directory[ ]*=.*@screenshot_directory = \"$RETROARCH_SCREENSHOTS_DIR\"@" "$RETROARCH_CONFIG_FILE"
+
+if [ "$retroarch_audio_out_rate" != "" ]; then
+	sed -i "s@audio_out_rate[ ]*=.*@audio_out_rate = \"$retroarch_audio_out_rate\"@" "$RETROARCH_CONFIG_FILE"
+fi
+
+if [ "$retroarch_audio_driver" != "" ]; then
+        sed -i "s@audio_driver[ ]*=.*@audio_driver = \"$retroarch_audio_driver\"@" "$RETROARCH_CONFIG_FILE"
+fi
+
+if [ "$retroarch_audio_device" != "" ]; then
+        sed -i "s@audio_device[ ]*=.*@audio_device = \"$retroarch_audio_device\"@" "$RETROARCH_CONFIG_FILE"
+fi
+
+if [ "$retroarch_video_threaded" != "" ]; then
+	sed -i "s@video_threaded[ ]*=.*@video_threaded = \"$retroarch_video_threaded\"@" "$RETROARCH_CONFIG_FILE"
+fi
+
+if [ "$retroarch_menu_driver" != "" ]; then
+        sed -i "s@menu_driver[ ]*=.*@menu_driver = \"$retroarch_menu_driver\"@" "$RETROARCH_CONFIG_FILE"
+fi
+
+if [ "$retroarch_rewind_enable" != "" ]; then
+	sed -i "s@rewind_enable[ ]*=.*@rewind_enable = \"$retroarch_rewind_enable\"@" "$RETROARCH_CONFIG_FILE" 
+fi
+
+if [ "$retroarch_fps_show" != "" ]; then
+	sed -i "s@fps_show[ ]*=.*@fps_show = \"$retroarch_fps_show\"@" "$RETROARCH_CONFIG_FILE" 
+fi
+### END of configuration changes
+
+
+# Fixes problem with symbolic links on libs provided by "32 bits libs for RetroArch" addon (if installed)
+if [ -d "$LIBS32BIT_ADDON_DIR" ]; then
+	PREV_DIR=`pwd`
+	cd "$LIBS32BIT_ADDON_DIR/lib"
+	if [ ! -h "$LIBS32BIT_ADDON_DIR/lib/libEGL.so" ]; then
+		rm -f libEGL.so
+		ln -s libMali.so libEGL.so
+	fi
+	if [ ! -h "$LIBS32BIT_ADDON_DIR/lib/libGLESv2.so" ]; then
+		rm -f libGLESv2.so
+		ln -s libMali.so libGLESv2.so
+	fi
+	cd "$PREV_DIR"
+fi
+
+# Determine if this system has required library /lib/ld-linux-armhf.so.3, and use that to define what binary to use
+if [ -f "/lib/ld-linux-armhf.so.3" ]; then
+	RETROARCH_EXE="$ADDON_DIR/bin/retroarch"
+else
+	RETROARCH_EXE="$ADDON_DIR/bin/retroarch"
+	# to make sure we are on bin folder when we start the modified retroarch and interpreter can be executed
+	chmod 755 "$ADDON_DIR/lib/ld-linux-armhf.so"
+	cd "$ADDON_DIR/bin"
+fi
+
+if [ "$force_32bit_libs" == "true" ]; then
+	RETROARCH_EXE="$ADDON_DIR/bin/retroarch"
+	LD_LIBRARY_PATH="$LIBS32BIT_ADDON_DIR/lib:$LD_LIBRARY_PATH"
+        # to make sure we are on bin folder when we start the modified retroarch and interpreter can be executed
+	chmod 755 "$ADDON_DIR/lib/ld-linux-armhf.so"
+        cd "$ADDON_DIR/bin"
+else
+	LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$LIBS32BIT_ADDON_DIR/lib"
+fi
+
+	pgrep /storage/.emulationstation/emulationstation | xargs kill -SIGSTOP
+	$RETROARCH_EXE -c $RETROARCH_CONFIG_FILE -L $ADDON_DIR/lib/libretro/$1_libretro.so "$2"
+	pgrep /storage/.emulationstation/emulationstation | xargs kill -SIGCONT
+
+exit 0

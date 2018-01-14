@@ -1,0 +1,7 @@
+#!/bin/sh
+
+. /etc/profile
+
+    systemctl stop kodi
+    /storage/.emulationstation/emulationstation
+    systemctl start kodi
