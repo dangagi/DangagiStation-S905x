@@ -1,0 +1,9 @@
+nb.
+If not present make symbolic links
+
+ln -s ./dc/dc_bios.bin dc_bios.bin
+ln -s ./dc/dc_boot.bin dc_boot.bin
+ln -s ./dc/dc_flash.bin dc_bflash.bin
+ln -s ./fba/neogeo.zip neogeo.zip
+
+As a future enhancement, remember to create scripts for the automatic creation of symbolic links-
